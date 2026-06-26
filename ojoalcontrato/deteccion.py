@@ -202,3 +202,40 @@ def benford_primer_digito(rows):
     obs = {d: 100 * cont.get(d, 0) / n for d in range(1, 10)}
     desv = max(abs(obs[d] - esperado[d]) for d in range(1, 10))
     return {"n": n, "suficiente": True, "esperado": esperado, "observado": obs, "desviacion_max": desv}
+
+
+def rankear_contratos(rows, top=20):
+    """Lista CONTRATO POR CONTRATO los más atípicos, ordenados por nivel de riesgo.
+    Complementa a `analizar` (que da el agregado de la entidad). Excluye convenios y basura."""
+    rows = _dedupe(rows)
+    privados = [c for c in rows
+                if not _es_publico(c.get("nom_raz_social_contratista"), c.get("tipo_de_contrato"),
+                                   c.get("objeto_del_proceso"))
+                and not _es_junk(c.get("documento_proveedor"), c.get("nom_raz_social_contratista"))]
+    vals = [v for c in privados if (v := _num(c.get("valor_contrato"))) > 0]
+    med = statistics.median(vals) if vals else 0
+    cnt = collections.Counter(c.get("documento_proveedor") for c in privados)
+
+    marcados = []
+    for c in privados:
+        v = _num(c.get("valor_contrato"))
+        modal = (c.get("modalidad_de_contrataci_n") or "").lower()
+        razones, score = [], 0
+        if med and v > med * 10:
+            razones.append("valor atípico (>10× la mediana de la entidad)"); score += 3
+        if "directa" in modal and med and v > med * 3:
+            razones.append("contratación directa de monto alto"); score += 2
+        if cnt.get(c.get("documento_proveedor"), 0) >= 5:
+            razones.append(f"proveedor recurrente ({cnt[c.get('documento_proveedor')]} contratos)"); score += 2
+        if razones:
+            marcados.append({
+                "score": score, "valor": v, "razones": razones,
+                "proveedor": c.get("nom_raz_social_contratista"),
+                "documento": c.get("documento_proveedor"),
+                "fecha": (c.get("fecha_de_firma_del_contrato") or "")[:10],
+                "modalidad": c.get("modalidad_de_contrataci_n"),
+                "objeto": (c.get("objeto_del_proceso") or "")[:150],
+                "url": c.get("url_contrato"),
+            })
+    marcados.sort(key=lambda x: (-x["score"], -x["valor"]))
+    return {"total": len(rows), "privados": len(privados), "marcados": len(marcados), "top": marcados[:top]}

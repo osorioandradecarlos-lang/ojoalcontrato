@@ -129,6 +129,31 @@ def benford(nit: str) -> str:
 
 
 @mcp.tool()
+def contratos_riesgo(nit: str, desde: str = "", hasta: str = "", top: int = 20) -> str:
+    """Lista los contratos individuales más atípicos de una entidad, UNO POR UNO y ordenados por
+    nivel de riesgo (a diferencia de escanear_entidad, que da el resumen agregado). Úsala cuando
+    el usuario quiera el detalle contrato a contrato ("los N contratos más raros"). Excluye los
+    convenios entre entidades públicas. Fechas opcionales en formato YYYY-MM-DD."""
+    rows = secop.contratos_entidad(nit, desde or None, hasta or None)
+    if not rows:
+        return f"No encontré contratos para el NIT {nit} en ese rango."
+    r = deteccion.rankear_contratos(rows, top=top)
+    if not r["top"]:
+        return (f"Analicé {r['total']} contratos (sin duplicar, {r['privados']} a privados); "
+                "ninguno disparó banderas individuales fuertes.")
+    out = [f"CONTRATOS CON MAYOR RIESGO — NIT {nit}",
+           f"{r['total']} contratos sin duplicar | {r['marcados']} marcados | top {min(top, len(r['top']))}"]
+    for i, c in enumerate(r["top"], 1):
+        out.append(f"\n{i}. {_money(c['valor'])} | {c['fecha']} | {c['modalidad']}")
+        out.append(f"   {c['proveedor']} (doc {c['documento']})")
+        out.append(f"   {c['objeto']}")
+        out.append(f"   🚩 {' | '.join(c['razones'])}")
+        if c.get("url"):
+            out.append(f"   {c['url']}")
+    return "\n".join(out) + _DISCLAIMER
+
+
+@mcp.tool()
 def generar_derecho_peticion(entidad: str, hallazgos: str, solicitante: str = "[Tu nombre]") -> str:
     """Redacta un borrador de derecho de petición formal (Art. 23 C.P.) dirigido a una entidad,
     pidiendo los soportes de los hallazgos detectados. 'hallazgos' es un texto con lo que se quiere preguntar."""
