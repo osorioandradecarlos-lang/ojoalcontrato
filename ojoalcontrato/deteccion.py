@@ -20,6 +20,10 @@ PUBLICO_HINTS = [
     "UNIVERSIDAD", "INSTITUTO", "FONDO", "SECRETARIA", "AREA METROPOLITANA",
     "CORPORACION AUTONOMA", "HOSPITAL", "INSTITUCION EDUCATIVA", "UNIDAD ADMINISTRATIVA",
     "FEDERACION DE MUNICIPIOS", "MINISTERIO", "AGENCIA NACIONAL",
+    # Institutos descentralizados y empresas industriales y comerciales del Estado
+    "E.I.C.E", "EICE", "EMPRESA INDUSTRIAL Y COMERCIAL", "BOMBEROS",
+    "INFITULUA", "INFIVALLE", "INFI", "BENEFICENCIA", "LOTERIA", "IMDER",
+    "INSTITUTO MUNICIPAL", "EMPRESA SOCIAL DEL ESTADO", "CUERPO DE BOMBEROS",
 ]
 
 
@@ -30,12 +34,13 @@ def _num(x):
         return 0.0
 
 
-def _es_publico(nombre, tipo_contrato=""):
+def _es_publico(nombre, tipo_contrato="", objeto=""):
     n = (nombre or "").upper()
     if any(h in n for h in PUBLICO_HINTS):
         return True
-    t = (tipo_contrato or "").upper()
-    return "INTERADMINISTRATIV" in t or "CONVENIO" in t
+    # El campo tipo a veces no lo dice, pero el objeto sí ("CONTRATO INTERADMINISTRATIVO")
+    txt = (tipo_contrato or "").upper() + " " + (objeto or "").upper()
+    return "INTERADMINISTRATIV" in txt or "CONVENIO" in txt
 
 
 # Marcadores de razón social de EMPRESA (vs persona natural)
@@ -61,8 +66,22 @@ def _es_empresa(nombre, doc):
     return d.isdigit() and len(d) == 9 and d[0] in "89"
 
 
+def _dedupe(rows):
+    """SECOP Integrado trae filas repetidas (la misma de SECOP I y II). Las quitamos."""
+    seen, out = set(), []
+    for c in rows:
+        k = (c.get("numero_del_contrato"), c.get("valor_contrato"),
+             c.get("documento_proveedor"), c.get("fecha_de_firma_del_contrato"))
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(c)
+    return out
+
+
 def analizar(rows):
     """Analiza los contratos de una entidad. Devuelve dict con contexto + hallazgos."""
+    rows = _dedupe(rows)
     res = {"n": len(rows), "contexto": {}, "hallazgos": [], "convenios": []}
     if not rows:
         return res
@@ -88,7 +107,8 @@ def analizar(rows):
         p["n"] += 1
         p["val"] += _num(c.get("valor_contrato"))
         p["nombre"] = c.get("nom_raz_social_contratista") or p["nombre"]
-        if _es_publico(c.get("nom_raz_social_contratista"), c.get("tipo_de_contrato")):
+        if _es_publico(c.get("nom_raz_social_contratista"), c.get("tipo_de_contrato"),
+                       c.get("objeto_del_proceso")):
             p["publico"] = True
 
     privados = [(d, p) for d, p in prov.items()
@@ -150,7 +170,8 @@ def analizar(rows):
         med = statistics.median(vals)
         outs = [c for c in rows
                 if _num(c.get("valor_contrato")) > med * 10
-                and not _es_publico(c.get("nom_raz_social_contratista"), c.get("tipo_de_contrato"))]
+                and not _es_publico(c.get("nom_raz_social_contratista"), c.get("tipo_de_contrato"),
+                                    c.get("objeto_del_proceso"))]
         for c in sorted(outs, key=lambda c: -_num(c.get("valor_contrato")))[:3]:
             res["hallazgos"].append({
                 "sev": 64,

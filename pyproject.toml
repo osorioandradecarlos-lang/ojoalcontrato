@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ojoalcontrato"
+version = "0.1.0"
+description = "Veeduría ciudadana sobre la contratación pública colombiana (SECOP) — MCP + Skill"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Carlos Fernando Osorio-Andrade" }]
+dependencies = ["mcp>=1.2.0", "requests>=2.31.0"]
+
+[project.scripts]
+ojoalcontrato = "ojoalcontrato.server:main"
+
+[tool.setuptools]
+packages = ["ojoalcontrato"]
